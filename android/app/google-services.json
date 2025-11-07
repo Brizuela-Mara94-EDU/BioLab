@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "229837916669",
+    "project_id": "biolab-b78e8",
+    "storage_bucket": "biolab-b78e8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:229837916669:android:9797872bc5437f5fd33194",
+        "android_client_info": {
+          "package_name": "com.example.biolab"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC8auqvZE6QHGVVn8bg4MlA81owwoJtCn0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

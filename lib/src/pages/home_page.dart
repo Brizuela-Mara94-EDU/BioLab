@@ -1,7 +1,14 @@
+// src/pages/home_page.dart
 import 'package:flutter/material.dart';
+import 'login_page.dart';
+import 'category_detail_page.dart';
+import 'camera_page.dart';
+import 'new_worksheet_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String email;
+
+  const HomePage({super.key, required this.email});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -36,17 +43,21 @@ class _HomePageState extends State<HomePage> {
     },
   ];
 
+  String get userName {
+    final emailName = widget.email.split('@')[0];
+    return emailName.isNotEmpty
+        ? emailName[0].toUpperCase() + emailName.substring(1).toLowerCase()
+        : 'Usuario';
+  }
+
   void _jumpToCategory() {
     int targetIndex = 0;
 
     if (_selectedCategoryIndex == 0) {
-      // Animal - ir a Vertebrados (índice 0)
       targetIndex = 0;
     } else if (_selectedCategoryIndex == 1) {
-      // Botánica - ir a Botánica (índice 2)
       targetIndex = 2;
     } else if (_selectedCategoryIndex == 2) {
-      // Hongos - ir a Hongos (índice 3)
       targetIndex = 3;
     }
 
@@ -54,6 +65,112 @@ class _HomePageState extends State<HomePage> {
       targetIndex,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
+    );
+  }
+
+  void _showUserMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              backgroundColor: const Color(0xFF6F8B5E),
+              radius: 30,
+              child: Text(
+                widget.email.isNotEmpty ? widget.email[0].toUpperCase() : 'U',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              userName,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              widget.email,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.person, color: Color(0xFF6F8B5E)),
+              title: const Text('Perfil'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Color(0xFF6F8B5E)),
+              title: const Text('Configuración'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text(
+                'Cerrar sesión',
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showLogoutDialog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Cerrar sesión',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text(
+                'Cerrar sesión',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -71,34 +188,39 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header con saludo
             Container(
               padding: const EdgeInsets.all(20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Bienvenida, Mara!',
-                    style: TextStyle(
+                  Text(
+                    'Bienvenido, $userName!',
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
                   ),
-                  CircleAvatar(
-                    backgroundColor: Colors.grey[300],
-                    radius: 20,
-                    child: const Icon(
-                      Icons.person,
-                      color: Colors.grey,
-                      size: 24,
+                  GestureDetector(
+                    onTap: _showUserMenu,
+                    child: CircleAvatar(
+                      backgroundColor: const Color(0xFF6F8B5E),
+                      radius: 20,
+                      child: Text(
+                        widget.email.isNotEmpty
+                            ? widget.email[0].toUpperCase()
+                            : 'U',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // Pestañas de categorías (atajos)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -147,41 +269,30 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 24),
 
-            // PageView con todas las 4 cards
             Expanded(
               child: Container(
-                margin: const EdgeInsets.only(
-                  bottom: 20,
-                ), // Espacio antes del navbar
+                margin: const EdgeInsets.only(bottom: 20),
                 child: PageView.builder(
                   controller: _pageController,
                   itemCount: _allCategories.length,
                   onPageChanged: (index) {
-                    // Actualizar la pestaña activa basada en la card visible
                     setState(() {
                       if (index <= 1) {
-                        // Vertebrados o Invertebrados -> Animal
                         _selectedCategoryIndex = 0;
                       } else if (index == 2) {
-                        // Botánica
                         _selectedCategoryIndex = 1;
                       } else if (index == 3) {
-                        // Hongos
                         _selectedCategoryIndex = 2;
                       }
                     });
                   },
                   itemBuilder: (context, index) {
-                    // Ajustar margen para la primera y última card
                     EdgeInsets margin;
                     if (index == 0) {
-                      // Primera card: menos espacio a la izquierda
                       margin = const EdgeInsets.only(left: 5, right: 10);
                     } else if (index == _allCategories.length - 1) {
-                      // Última card: menos espacio a la derecha
                       margin = const EdgeInsets.only(left: 10, right: 5);
                     } else {
-                      // Cards del medio: espacio simétrico
                       margin = const EdgeInsets.symmetric(horizontal: 10);
                     }
 
@@ -197,7 +308,6 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
 
-      // Bottom navigation con FAB
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Container(
         width: 56,
@@ -215,7 +325,18 @@ class _HomePageState extends State<HomePage> {
         ),
         child: IconButton(
           onPressed: () {
-            _showAddEntryDialog(context);
+            // Navega directamente a la página de nueva planilla con el email
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => NewWorksheetPage(
+                  userEmail: widget.email, // ← CAMBIO IMPORTANTE
+                ),
+              ),
+            ).then((_) {
+              // Opcional: recargar algo si es necesario cuando vuelva
+              setState(() {});
+            });
           },
           icon: const Icon(Icons.add, color: Colors.white, size: 28),
         ),
@@ -255,9 +376,17 @@ class _HomePageState extends State<HomePage> {
                     size: 28,
                   ),
                 ),
-                const SizedBox(width: 40), // Espacio para el FAB
+                const SizedBox(width: 40),
                 IconButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    // Navega a la página de cámara
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CameraPage(),
+                      ),
+                    );
+                  },
                   icon: Icon(
                     Icons.camera_alt,
                     color: Colors.grey[600],
@@ -275,7 +404,19 @@ class _HomePageState extends State<HomePage> {
   Widget _buildCard(Map<String, String> category) {
     return GestureDetector(
       onTap: () {
-        _showCategoryDetail(context, category['title']!);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CategoryDetailPage(
+              categoryTitle: category['title']!,
+              categoryType: category['category']!,
+              userEmail: widget.email, // ← CAMBIO IMPORTANTE
+            ),
+          ),
+        ).then((_) {
+          // Opcional: recargar datos cuando vuelva de la página de detalles
+          setState(() {});
+        });
       },
       child: Container(
         decoration: BoxDecoration(
@@ -293,12 +434,10 @@ class _HomePageState extends State<HomePage> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Imagen de fondo
               Image.asset(
                 category['image']!,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  // Si la imagen no se puede cargar, mostrar placeholder
                   return Container(
                     color: Colors.grey[200],
                     child: const Icon(
@@ -309,8 +448,6 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
               ),
-
-              // Gradient overlay (más sutil)
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -320,19 +457,15 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-
-              // Título con background semitransparente que ocupa todo el ancho
               Positioned(
                 left: 0,
                 bottom: 0,
                 right: 0,
                 child: Container(
-                  height: 80, // Altura fija para el área del texto
+                  height: 80,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(
-                      0.5,
-                    ), // Background negro con 50% opacidad
+                    color: Colors.black.withOpacity(0.5),
                     borderRadius: const BorderRadius.only(
                       bottomLeft: Radius.circular(16),
                       bottomRight: Radius.circular(16),
@@ -354,56 +487,6 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  void _showCategoryDetail(BuildContext context, String categoryTitle) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Trabajos de $categoryTitle',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Aquí se mostrarían los trabajos guardados para esta categoría.',
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAddEntryDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Nuevo Trabajo'),
-        content: const Text('¿Qué tipo de trabajo deseas agregar?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Aquí iría la navegación a la página de agregar trabajo
-            },
-            child: const Text('Agregar'),
-          ),
-        ],
       ),
     );
   }
