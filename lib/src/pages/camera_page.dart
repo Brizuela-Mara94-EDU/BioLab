@@ -1,13 +1,19 @@
 // src/pages/camera_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:gal/gal.dart';
+import 'login_page.dart';
+
+// Importación condicional para la descarga en web
+import 'package:universal_html/html.dart' as html;
 
 class CameraPage extends StatefulWidget {
-  const CameraPage({super.key});
+  final String userEmail;
+
+  const CameraPage({super.key, required this.userEmail});
 
   @override
   State<CameraPage> createState() => _CameraPageState();
@@ -37,6 +43,14 @@ class _CameraPageState extends State<CameraPage> {
       }
     } catch (e) {
       debugPrint('Error al inicializar la cámara: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al inicializar la cámara: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -70,6 +84,14 @@ class _CameraPageState extends State<CameraPage> {
       }
     } catch (e) {
       debugPrint('Error al configurar la cámara: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al configurar la cámara: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -163,101 +185,186 @@ class _CameraPageState extends State<CameraPage> {
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.black,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
+        // Usar MediaQuery para un tamaño responsive del diálogo
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.9,
+          child: Column(
+            mainAxisSize:
+                MainAxisSize.max, // Se asegura de que Column ocupe el Container
+            children: [
+              AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                title: const Text(
+                  'Foto capturada',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
-              title: const Text(
-                'Foto capturada',
-                style: TextStyle(color: Colors.white),
+              Expanded(
+                child: InteractiveViewer(
+                  child: kIsWeb
+                      ? Image.network(image.path, fit: BoxFit.contain)
+                      : Image.file(File(image.path), fit: BoxFit.contain),
+                ),
               ),
-            ),
-            Expanded(
-              child: InteractiveViewer(
-                child: kIsWeb
-                    ? Image.network(image.path, fit: BoxFit.contain)
-                    : Image.file(File(image.path), fit: BoxFit.contain),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retomar'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[800],
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retomar'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[800],
+                      ),
                     ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _saveAndProcess(image);
-                    },
-                    icon: const Icon(Icons.check),
-                    label: const Text('Guardar'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6F8B5E),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        // Espera a que la función de guardado/descarga termine
+                        await _saveAndProcess(image);
+                        if (mounted) {
+                          // Cierra el diálogo *después* de que se haya intentado guardar
+                          Navigator.pop(context);
+                        }
+                      },
+                      icon: const Icon(Icons.check),
+                      label: const Text('Guardar'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6F8B5E),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
+  // ------------------------------------------------------------------
+  // Método para manejar la descarga en Web
+  // ------------------------------------------------------------------
+  Future<void> _webDownload(XFile image) async {
+    final bytes = await image.readAsBytes();
+    final blob = html.Blob([bytes]);
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute(
+        'download',
+        'MiApp_Foto_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      )
+      ..click();
+
+    html.Url.revokeObjectUrl(url); // Liberar la URL temporal
+  }
+
   Future<void> _saveAndProcess(XFile image) async {
+    if (!mounted) return;
+
+    // Mostrar indicador de carga
+    final loadingSnackBar = SnackBar(
+      content: Row(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Text(
+            kIsWeb ? 'Descargando foto...' : 'Guardando foto...',
+          ), // Mensaje adaptado
+        ],
+      ),
+      backgroundColor: const Color(0xFF6F8B5E),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 10),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(loadingSnackBar);
+
     try {
       if (kIsWeb) {
-        // En web, la imagen ya está disponible en image.path
+        // SOLUCIÓN WEB: Forzar la descarga del archivo
+        await _webDownload(image);
+
         if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Foto capturada exitosamente'),
+              content: Text('✓ Foto descargada exitosamente.'),
               backgroundColor: Color(0xFF6F8B5E),
               behavior: SnackBarBehavior.floating,
             ),
           );
         }
       } else {
-        // En móvil, guardar en el directorio de la app
-        final Directory appDir = await getApplicationDocumentsDirectory();
-        final String fileName =
-            'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final String filePath = path.join(appDir.path, fileName);
-        await File(image.path).copy(filePath);
+        // Lógica para móvil/desktop (guardar en galería)
+        try {
+          await Gal.putImageBytes(await image.readAsBytes(), album: 'BioLab');
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Foto guardada: $fileName'),
-              backgroundColor: const Color(0xFF6F8B5E),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).hideCurrentSnackBar(); // Ocultar el de carga
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(child: Text('✓ Foto guardada en la galería')),
+                  ],
+                ),
+                backgroundColor: Color(0xFF6F8B5E),
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            throw Exception('No se pudo guardar la imagen: $e');
+          }
         }
       }
     } catch (e) {
-      debugPrint('Error al guardar la imagen: $e');
+      debugPrint('Error al guardar/descargar la imagen: $e');
       if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).hideCurrentSnackBar(); // Asegurar que se oculte el de carga
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al guardar la imagen'),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '❌ Error: ${kIsWeb ? 'Descarga fallida' : 'Guardado fallido'}',
+                  ),
+                ),
+              ],
+            ),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -295,7 +402,6 @@ class _CameraPageState extends State<CameraPage> {
                   setState(() {
                     _showGrid = value;
                   });
-                  Navigator.pop(context);
                 },
                 activeColor: const Color(0xFF6F8B5E),
               ),
@@ -362,6 +468,121 @@ class _CameraPageState extends State<CameraPage> {
     }
   }
 
+  String get userName {
+    final emailName = widget.userEmail.split('@')[0];
+    return emailName.isNotEmpty
+        ? emailName[0].toUpperCase() + emailName.substring(1).toLowerCase()
+        : 'Usuario';
+  }
+
+  void _showUserMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              backgroundColor: const Color(0xFF6F8B5E),
+              radius: 30,
+              child: Text(
+                widget.userEmail.isNotEmpty
+                    ? widget.userEmail[0].toUpperCase()
+                    : 'U',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              userName,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              widget.userEmail,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.person, color: Color(0xFF6F8B5E)),
+              title: const Text('Perfil'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Color(0xFF6F8B5E)),
+              title: const Text('Configuración'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text(
+                'Cerrar sesión',
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showLogoutDialog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Cerrar sesión',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text(
+                'Cerrar sesión',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _controller?.dispose();
@@ -370,32 +591,35 @@ class _CameraPageState extends State<CameraPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isInitialized ||
+        _controller == null ||
+        !_controller!.value.isInitialized) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF6F8B5E)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Vista previa de la cámara
-          if (_isInitialized && _controller != null)
-            SizedBox.expand(
-              child: Stack(
-                children: [
-                  FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: _controller!.value.previewSize!.height,
-                      height: _controller!.value.previewSize!.width,
-                      child: CameraPreview(_controller!),
-                    ),
-                  ),
-                  // Cuadrícula superpuesta
-                  if (_showGrid)
-                    CustomPaint(size: Size.infinite, painter: GridPainter()),
-                ],
+          // Vista previa de la cámara sin zoom ni deformación
+          Positioned.fill(
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: _controller!.value.aspectRatio,
+                child: CameraPreview(_controller!),
               ),
-            )
-          else
-            const Center(
-              child: CircularProgressIndicator(color: Color(0xFF6F8B5E)),
+            ),
+          ),
+
+          // Cuadrícula superpuesta
+          if (_showGrid)
+            Positioned.fill(
+              child: CustomPaint(size: Size.infinite, painter: GridPainter()),
             ),
 
           // Barra superior con controles
@@ -422,24 +646,49 @@ class _CameraPageState extends State<CameraPage> {
                     ),
                   ),
 
-                  // Botón de flash
-                  IconButton(
-                    onPressed: _toggleFlash,
-                    icon: Icon(
-                      _getFlashIconData(),
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
+                  Row(
+                    children: [
+                      // Botón de flash
+                      IconButton(
+                        onPressed: _toggleFlash,
+                        icon: Icon(
+                          _getFlashIconData(),
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
 
-                  // Botón de configuración
-                  IconButton(
-                    onPressed: _showOptionsMenu,
-                    icon: const Icon(
-                      Icons.settings,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+                      // Botón de configuración
+                      IconButton(
+                        onPressed: _showOptionsMenu,
+                        icon: const Icon(
+                          Icons.settings,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+
+                      // Avatar de usuario
+                      GestureDetector(
+                        onTap: _showUserMenu,
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          child: CircleAvatar(
+                            backgroundColor: const Color(0xFF6F8B5E),
+                            radius: 18,
+                            child: Text(
+                              widget.userEmail.isNotEmpty
+                                  ? widget.userEmail[0].toUpperCase()
+                                  : 'U',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -545,6 +794,36 @@ class _CameraPageState extends State<CameraPage> {
             ),
           ),
         ],
+      ),
+      bottomNavigationBar: Container(
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.home, color: Colors.white, size: 28),
+            ),
+            IconButton(
+              onPressed: () {},
+              icon: const Icon(
+                Icons.photo_camera,
+                color: Color(0xFF6F8B5E),
+                size: 28,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

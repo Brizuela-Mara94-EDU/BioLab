@@ -5,7 +5,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import '../services/worksheet_service.dart';
+import 'login_page.dart';
+import 'camera_page.dart';
+import 'new_worksheet_page.dart';
+import 'edit_worksheet_page.dart';
+import 'worksheet_page.dart';
 
 class CategoryDetailPage extends StatefulWidget {
   final String categoryTitle;
@@ -28,10 +34,6 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
   List<Map<String, dynamic>> _worksheets = [];
   bool _isLoading = true;
 
-  // Mapa para almacenar las imágenes personalizadas de cada trabajo
-  // En web: almacena bytes, en móvil: almacena path
-  final Map<String, dynamic> _customBackgroundImages = {};
-
   @override
   void initState() {
     super.initState();
@@ -53,6 +55,121 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       print('Error cargando worksheets: $e');
       setState(() => _isLoading = false);
     }
+  }
+
+  String get userName {
+    final emailName = widget.userEmail.split('@')[0];
+    return emailName.isNotEmpty
+        ? emailName[0].toUpperCase() + emailName.substring(1).toLowerCase()
+        : 'Usuario';
+  }
+
+  void _showUserMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              backgroundColor: const Color(0xFF6F8B5E),
+              radius: 30,
+              child: Text(
+                widget.userEmail.isNotEmpty
+                    ? widget.userEmail[0].toUpperCase()
+                    : 'U',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              userName,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              widget.userEmail,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.person, color: Color(0xFF6F8B5E)),
+              title: const Text('Perfil'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Color(0xFF6F8B5E)),
+              title: const Text('Configuración'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text(
+                'Cerrar sesión',
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showLogoutDialog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Cerrar sesión',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text(
+                'Cerrar sesión',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -79,17 +196,20 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: CircleAvatar(
-              backgroundColor: const Color(0xFF6F8B5E),
-              radius: 18,
-              child: Text(
-                widget.userEmail.isNotEmpty
-                    ? widget.userEmail[0].toUpperCase()
-                    : 'U',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+            child: GestureDetector(
+              onTap: _showUserMenu,
+              child: CircleAvatar(
+                backgroundColor: const Color(0xFF6F8B5E),
+                radius: 18,
+                child: Text(
+                  widget.userEmail.isNotEmpty
+                      ? widget.userEmail[0].toUpperCase()
+                      : 'U',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ),
@@ -113,14 +233,14 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                     color: Colors.grey[400],
                   ),
                   const SizedBox(height: 16),
-                  Text(
+                  const Text(
                     'No hay trabajos en esta categoría',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 16, color: Color(0xFF616161)),
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  const Text(
                     'Presiona el botón + para crear uno',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 14, color: Color(0xFF9E9E9E)),
                   ),
                 ],
               ),
@@ -154,9 +274,16 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         ),
         child: IconButton(
           onPressed: () {
-            // Cerrar esta página y volver al home para que el usuario
-            // pueda crear un nuevo worksheet desde allí
-            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    NewWorksheetPage(userEmail: widget.userEmail),
+              ),
+            ).then((_) {
+              // Recargar la lista cuando vuelve de crear una planilla
+              _loadWorksheets();
+            });
           },
           icon: const Icon(Icons.add, color: Colors.white, size: 28),
         ),
@@ -193,10 +320,18 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                 ),
                 const SizedBox(width: 40),
                 IconButton(
-                  onPressed: () {},
-                  icon: const Icon(
-                    Icons.list_alt,
-                    color: Color(0xFF6F8B5E),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            CameraPage(userEmail: widget.userEmail),
+                      ),
+                    );
+                  },
+                  icon: Icon(
+                    Icons.camera_alt,
+                    color: Colors.grey[600],
                     size: 28,
                   ),
                 ),
@@ -209,216 +344,242 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
   }
 
   Widget _buildWorkCard(Map<String, dynamic> work) {
-    final String workId = work['id'];
-    final dynamic customImageData = _customBackgroundImages[workId];
-    final bool hasCustomImage = customImageData != null;
+    final String workId = work['id'] ?? '';
+    final imagenFondoData = work['imagenFondo'];
+    Uint8List? imagenFondoBytes;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      height: 180,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+    if (imagenFondoData != null && imagenFondoData is List) {
+      imagenFondoBytes = Uint8List.fromList(List<int>.from(imagenFondoData));
+    }
+
+    final bool hasCustomImage = imagenFondoBytes != null;
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorksheetPage(
+              worksheetId: workId,
+              worksheetData: work,
+              userEmail: widget.userEmail,
+            ),
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Fondo: imagen personalizada o degradado por defecto
-            hasCustomImage
-                ? kIsWeb
-                      ? Image.memory(
-                          customImageData is Uint8List
-                              ? customImageData
-                              : Uint8List(0),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Color(0xFFD4C5B0), // Marrón claro
-                                    Color(0xFF9FB88A), // Verde claro
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        )
-                      : Image.file(
-                          File(
-                            customImageData is String ? customImageData : '',
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        height: 180,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              hasCustomImage
+                  ? Image.memory(
+                      imagenFondoBytes,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0xFFD4C5B0), Color(0xFF9FB88A)],
+                            ),
                           ),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Color(0xFFD4C5B0), // Marrón claro
-                                    Color(0xFF9FB88A), // Verde claro
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        )
-                : Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0xFFD4C5B0), // Marrón claro
-                          Color(0xFF9FB88A), // Verde claro
-                        ],
+                        );
+                      },
+                    )
+                  : Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFFD4C5B0), Color(0xFF9FB88A)],
+                        ),
                       ),
                     ),
-                  ),
-
-            // Degradado oscuro en la parte inferior para mejorar legibilidad
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.5)],
-                ),
-              ),
-            ),
-
-            // Información del trabajo
-            Positioned(
-              left: 16,
-              bottom: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    work['date'] ?? 'Sin fecha',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    work['location'] ?? 'Sin ubicación',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Menú de opciones
-            Positioned(
-              right: 8,
-              top: 8,
-              child: Container(
+              Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.white),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.5)],
                   ),
-                  onSelected: (value) {
-                    if (value == 'view') {
-                      _showWorksheetDetails(work);
-                    } else if (value == 'edit') {
-                      _showNotAvailableMessage('Editar');
-                    } else if (value == 'delete') {
-                      _showDeleteDialog(work['id']);
-                    } else if (value == 'add_images') {
-                      _showNotAvailableMessage('Agregar imágenes');
-                    } else if (value == 'background_image') {
-                      _pickBackgroundImage(work['id']);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'view',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.visibility,
-                            size: 20,
-                            color: Color(0xFF6F8B5E),
-                          ),
-                          SizedBox(width: 8),
-                          Text('Ver detalles'),
-                        ],
+                ),
+              ),
+              Positioned(
+                left: 16,
+                bottom: 16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      work['date']?.toString() ?? 'Sin fecha',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit, size: 20, color: Color(0xFF6F8B5E)),
-                          SizedBox(width: 8),
-                          Text('Editar'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, size: 20, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Eliminar'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'add_images',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.add_photo_alternate,
-                            size: 20,
-                            color: Color(0xFF6F8B5E),
-                          ),
-                          SizedBox(width: 8),
-                          Text('Agregar imágenes'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'background_image',
-                      child: Row(
-                        children: [
-                          Icon(Icons.image, size: 20, color: Color(0xFF6F8B5E)),
-                          SizedBox(width: 8),
-                          Text('Imagen de fondo'),
-                        ],
+                    Text(
+                      work['location']?.toString() ?? 'Sin ubicación',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.white),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'view') {
+                        _showWorksheetDetails(work);
+                      } else if (value == 'edit') {
+                        _navigateToEdit(work);
+                      } else if (value == 'delete') {
+                        _showDeleteDialog(work['id']);
+                      } else if (value == 'add_images') {
+                        _showNotAvailableMessage('Agregar imágenes');
+                      } else if (value == 'background_image') {
+                        _pickBackgroundImage(work['id']);
+                      } else if (value == 'remove_background') {
+                        _removeBackgroundImage(work['id']);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'view',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.visibility,
+                              size: 20,
+                              color: Color(0xFF6F8B5E),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Ver detalles'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.edit,
+                              size: 20,
+                              color: Color(0xFF6F8B5E),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Editar'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 20, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Eliminar'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'add_images',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.add_photo_alternate,
+                              size: 20,
+                              color: Color(0xFF6F8B5E),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Agregar imágenes'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'background_image',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.image,
+                              size: 20,
+                              color: Color(0xFF6F8B5E),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Imagen de fondo'),
+                          ],
+                        ),
+                      ),
+                      if (hasCustomImage)
+                        const PopupMenuItem(
+                          value: 'remove_background',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: Colors.orange,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Quitar imagen de fondo'),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  void _navigateToEdit(Map<String, dynamic> work) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditWorksheetPage(
+          worksheetId: work['id'],
+          worksheetData: work,
+          userEmail: widget.userEmail,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadWorksheets();
+    }
   }
 
   void _showWorksheetDetails(Map<String, dynamic> work) {
@@ -438,7 +599,6 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
           child: ListView(
             controller: scrollController,
             children: [
-              // Indicador de arrastre
               Center(
                 child: Container(
                   width: 40,
@@ -450,7 +610,6 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                   ),
                 ),
               ),
-              // Título
               Row(
                 children: [
                   const Icon(Icons.description, color: Color(0xFF6F8B5E)),
@@ -462,19 +621,30 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                 ],
               ),
               const Divider(height: 30),
-              // Información básica
-              _buildDetailRow('Fecha', work['date'] ?? 'No disponible'),
-              _buildDetailRow('Ubicación', work['location'] ?? 'No disponible'),
-              _buildDetailRow('Tipo', work['fieldWorkType'] ?? 'No disponible'),
+              _buildDetailRow(
+                'Fecha',
+                work['date']?.toString() ?? 'No disponible',
+              ),
+              _buildDetailRow(
+                'Ubicación',
+                work['location']?.toString() ?? 'No disponible',
+              ),
+              _buildDetailRow(
+                'Tipo',
+                work['fieldWorkType']?.toString() ?? 'No disponible',
+              ),
               if (work['animalType'] != null)
-                _buildDetailRow('Subtipo', work['animalType']),
+                _buildDetailRow(
+                  'Subtipo',
+                  work['animalType']?.toString() ?? '',
+                ),
               _buildDetailRow(
                 'Objetos evaluados',
                 work['objectCount']?.toString() ?? '0',
               ),
               const SizedBox(height: 20),
-              // Datos recopilados
               if (work['selectedData'] != null &&
+                  work['selectedData'] is List &&
                   (work['selectedData'] as List).isNotEmpty) ...[
                 const Text(
                   'Datos recopilados:',
@@ -486,7 +656,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                   runSpacing: 8,
                   children: (work['selectedData'] as List).map((data) {
                     return Chip(
-                      label: Text(data.toString()),
+                      label: Text(data?.toString() ?? ''),
                       backgroundColor: const Color(0xFF6F8B5E).withOpacity(0.1),
                       labelStyle: const TextStyle(color: Color(0xFF6F8B5E)),
                     );
@@ -494,8 +664,8 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                 ),
                 const SizedBox(height: 16),
               ],
-              // Campos personalizados
               if (work['customFields'] != null &&
+                  work['customFields'] is List &&
                   (work['customFields'] as List).isNotEmpty) ...[
                 const Text(
                   'Campos personalizados:',
@@ -503,17 +673,19 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                 ),
                 const SizedBox(height: 8),
                 ...(work['customFields'] as List).map((field) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      '• ${field['name']} (${field['type']})',
-                      style: TextStyle(color: Colors.grey[700]),
-                    ),
-                  );
+                  if (field is Map) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '• ${field['name']?.toString() ?? 'Campo'} (${field['type']?.toString() ?? 'Texto'})',
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
                 }),
                 const SizedBox(height: 16),
               ],
-              // Botón de cerrar
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
@@ -564,14 +736,11 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
   Future<void> _pickBackgroundImage(String workId) async {
     try {
       final ImagePicker picker = ImagePicker();
-
       ImageSource? source;
 
-      // En web, solo mostrar opción de galería
       if (kIsWeb) {
         source = ImageSource.gallery;
       } else {
-        // En móvil, mostrar diálogo para elegir entre cámara o galería
         source = await showDialog<ImageSource>(
           context: context,
           builder: (context) => AlertDialog(
@@ -604,38 +773,42 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
 
       if (source == null) return;
 
-      // Solicitar permisos solo en móvil
+      // Solicitar permisos solo en dispositivos móviles
       if (!kIsWeb) {
         bool permissionGranted = false;
+
         if (source == ImageSource.camera) {
           permissionGranted = await _requestPermission(Permission.camera);
           if (!permissionGranted) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text(
-                  'Se necesita permiso de cámara para continuar',
-                ),
+                content: const Text('Se necesita permiso de cámara'),
                 action: SnackBarAction(
                   label: 'Ajustes',
                   onPressed: () => openAppSettings(),
                 ),
-                duration: const Duration(seconds: 3),
                 backgroundColor: Colors.orange,
               ),
             );
             return;
           }
         } else {
-          // Para galería en Android 13+
+          // Para galería
           if (Platform.isAndroid) {
-            final androidInfo = await Future.value(13); // Simplificado
-            if (androidInfo >= 13) {
+            // Obtener la versión real de Android
+            final deviceInfo = DeviceInfoPlugin();
+            final androidInfo = await deviceInfo.androidInfo;
+
+            // Android 13 (API 33) y superior usa Permission.photos
+            if (androidInfo.version.sdkInt >= 33) {
               permissionGranted = await _requestPermission(Permission.photos);
             } else {
+              // Android 12 y anteriores usan Permission.storage
               permissionGranted = await _requestPermission(Permission.storage);
             }
-          } else {
+          } else if (Platform.isIOS) {
+            // iOS siempre usa Permission.photos
             permissionGranted = await _requestPermission(Permission.photos);
           }
 
@@ -643,14 +816,11 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text(
-                  'Se necesita permiso para acceder a la galería',
-                ),
+                content: const Text('Se necesita permiso para la galería'),
                 action: SnackBarAction(
                   label: 'Ajustes',
                   onPressed: () => openAppSettings(),
                 ),
-                duration: const Duration(seconds: 3),
                 backgroundColor: Colors.orange,
               ),
             );
@@ -659,30 +829,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         }
       }
 
-      // Mostrar indicador de carga
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ),
-                SizedBox(width: 16),
-                Text('Abriendo...'),
-              ],
-            ),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      // Seleccionar la imagen con manejo mejorado de errores
+      // Seleccionar imagen
       final XFile? pickedFile = await picker.pickImage(
         source: source,
         maxWidth: 1920,
@@ -690,47 +837,104 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         imageQuality: 85,
       );
 
-      if (pickedFile != null && pickedFile.path.isNotEmpty) {
-        if (kIsWeb) {
-          // En web, leer los bytes de la imagen
-          final bytes = await pickedFile.readAsBytes();
-          setState(() {
-            _customBackgroundImages[workId] = bytes;
-          });
-        } else {
-          // En móvil, verificar que el archivo existe y es accesible
-          final file = File(pickedFile.path);
-          if (await file.exists()) {
-            setState(() {
-              _customBackgroundImages[workId] = pickedFile.path;
-            });
-          } else {
-            throw Exception('No se pudo acceder al archivo de imagen');
-          }
-        }
+      if (pickedFile == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Selección cancelada'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+        return;
+      }
+
+      // Mostrar indicador de carga
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 40),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6F8B5E)),
+                  strokeWidth: 3,
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Procesando imagen...',
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Por favor espera',
+                  style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Leer y procesar imagen
+      final Uint8List imageBytes = await pickedFile.readAsBytes();
+
+      bool success = await _worksheetService.updateWorksheetBackgroundImage(
+        workId: workId,
+        imageBytes: imageBytes,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Cerrar loading
+
+      if (success) {
+        await _loadWorksheets();
 
         if (!mounted) return;
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Row(
               children: [
                 Icon(Icons.check_circle, color: Colors.white),
                 SizedBox(width: 8),
-                Text('Imagen de fondo actualizada correctamente'),
+                Text('Imagen de fondo actualizada'),
               ],
             ),
             duration: Duration(seconds: 2),
             backgroundColor: Color(0xFF6F8B5E),
           ),
         );
-      } else if (pickedFile == null) {
-        // Usuario canceló la selección
-        if (!mounted) return;
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Selección cancelada'),
-            duration: Duration(seconds: 1),
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Error al actualizar la imagen'),
+              ],
+            ),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -740,13 +944,9 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       String errorMessage = 'Error al seleccionar imagen';
 
       if (e.toString().contains('camera_access_denied')) {
-        errorMessage =
-            'Permiso de cámara denegado. Ve a Ajustes para habilitarlo.';
+        errorMessage = 'Permiso de cámara denegado';
       } else if (e.toString().contains('photo_access_denied')) {
-        errorMessage =
-            'Permiso de galería denegado. Ve a Ajustes para habilitarlo.';
-      } else if (e.toString().contains('No se pudo acceder')) {
-        errorMessage = 'No se pudo acceder al archivo. Intenta de nuevo.';
+        errorMessage = 'Permiso de galería denegado';
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -760,11 +960,55 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
           ),
           duration: const Duration(seconds: 3),
           backgroundColor: Colors.red,
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {},
+        ),
+      );
+    }
+  }
+
+  Future<void> _removeBackgroundImage(String workId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6F8B5E)),
+        ),
+      ),
+    );
+
+    bool success = await _worksheetService.removeWorksheetBackgroundImage(
+      workId,
+    );
+
+    if (!mounted) return;
+    Navigator.pop(context);
+
+    if (success) {
+      await _loadWorksheets();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Imagen de fondo eliminada'),
+            ],
           ),
+          backgroundColor: Color(0xFF6F8B5E),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Error al eliminar la imagen'),
+            ],
+          ),
+          backgroundColor: Colors.red,
         ),
       );
     }
@@ -786,7 +1030,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Eliminar trabajo'),
         content: const Text(
-          '¿Estás seguro de que quieres eliminar este trabajo? Esta acción no se puede deshacer.',
+          '¿Estás seguro de que quieres eliminar este trabajo?\n\nPodrás recuperarlo más tarde desde la sección de trabajos eliminados.',
         ),
         actions: [
           TextButton(
@@ -797,7 +1041,6 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
             onPressed: () async {
               Navigator.pop(context);
 
-              // Mostrar indicador de carga
               showDialog(
                 context: context,
                 barrierDismissible: false,
@@ -810,10 +1053,12 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                 ),
               );
 
-              bool success = await _worksheetService.deleteWorksheet(workId);
+              bool success = await _worksheetService.softDeleteWorksheet(
+                workId,
+              );
 
               if (!mounted) return;
-              Navigator.pop(context); // Cerrar indicador de carga
+              Navigator.pop(context);
 
               if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -829,7 +1074,6 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                     backgroundColor: Color(0xFF6F8B5E),
                   ),
                 );
-                // Recargar la lista
                 _loadWorksheets();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(

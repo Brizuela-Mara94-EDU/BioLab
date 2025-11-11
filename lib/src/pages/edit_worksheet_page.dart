@@ -1,20 +1,27 @@
-// src/pages/new_worksheet_page.dart
+// src/pages/edit_worksheet_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/worksheet_service.dart';
 import '../services/location_service.dart';
 
-class NewWorksheetPage extends StatefulWidget {
+class EditWorksheetPage extends StatefulWidget {
   final String userEmail;
+  final String worksheetId;
+  final Map<String, dynamic> worksheetData;
 
-  const NewWorksheetPage({super.key, required this.userEmail});
+  const EditWorksheetPage({
+    super.key,
+    required this.userEmail,
+    required this.worksheetId,
+    required this.worksheetData,
+  });
 
   @override
-  State<NewWorksheetPage> createState() => _NewWorksheetPageState();
+  State<EditWorksheetPage> createState() => _EditWorksheetPageState();
 }
 
-class _NewWorksheetPageState extends State<NewWorksheetPage> {
+class _EditWorksheetPageState extends State<EditWorksheetPage> {
   int _currentStep = 0;
   String? _selectedFieldWork;
   String? _selectedAnimalType;
@@ -30,14 +37,13 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
   final LocationService _locationService = LocationService();
 
   final List<Map<String, dynamic>> _objectsData = [];
-  final List<Map<String, String>> _customFields = [];
+  List<Map<String, String>> _customFields = [];
 
-  // Variables para ubicación
   Map<String, dynamic>? _currentLocation;
   bool _isLoadingLocation = false;
   String? _locationError;
 
-  // Estructura completa de datos por categoría
+  // Estructura completa de datos (copiada de new_worksheet_page)
   final Map<String, Map<String, List<Map<String, dynamic>>>>
   _completeDataStructure = {
     'Botánica': {
@@ -264,11 +270,66 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
       ],
     },
   };
+  // --- Fin de la estructura de datos ---
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    _loadExistingData(); // Cargar datos existentes
+    _getCurrentLocation(); // Obtener ubicación actual
+  }
+
+  void _loadExistingData() {
+    setState(() {
+      // Cargar fieldWorkType y animalType de forma segura
+      _selectedFieldWork = widget.worksheetData['fieldWorkType']?.toString();
+      _selectedAnimalType = widget.worksheetData['animalType']?.toString();
+
+      _objectCount = widget.worksheetData['objectCount'] ?? 1;
+      _objectCountController.text = _objectCount.toString();
+
+      // Cargar datos seleccionados de forma segura
+      if (widget.worksheetData['selectedData'] != null) {
+        final dataList = widget.worksheetData['selectedData'];
+        if (dataList is List) {
+          _selectedData.addAll(
+            dataList
+                .map((item) => item.toString())
+                .where((item) => item.isNotEmpty),
+          );
+        }
+      }
+
+      // Cargar campos personalizados de forma segura
+      if (widget.worksheetData['customFields'] != null) {
+        final fields = widget.worksheetData['customFields'];
+        if (fields is List) {
+          _customFields = fields
+              .map((field) {
+                if (field is Map) {
+                  return {
+                    'name': field['name']?.toString() ?? 'Campo sin nombre',
+                    'type': field['type']?.toString() ?? 'Texto',
+                  };
+                }
+                return null;
+              })
+              .whereType<Map<String, String>>()
+              .toList();
+        }
+      }
+
+      // Cargar datos de objetos
+      if (widget.worksheetData['objectsData'] != null) {
+        final objectsData = widget.worksheetData['objectsData'];
+        if (objectsData is List) {
+          _objectsData.addAll(List<Map<String, dynamic>>.from(objectsData));
+        }
+      }
+
+      // INICIAR EN EL PASO 0 para permitir editar todo
+      _currentStep = 0;
+    });
   }
 
   @override
@@ -276,6 +337,8 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
     _objectCountController.dispose();
     super.dispose();
   }
+
+  // --- Todas las funciones de new_worksheet_page se copian aquí ---
 
   Future<void> _getCurrentLocation() async {
     setState(() {
@@ -352,11 +415,11 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
             borderRadius: BorderRadius.circular(16),
           ),
           title: const Text(
-            'Cancelar planilla',
+            'Salir de la edición', // Título modificado
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           content: const Text(
-            '¿Estás seguro de que quieres cancelar? Se perderán todos los datos ingresados.',
+            '¿Estás seguro de que quieres salir? Se perderán los cambios no guardados.', // Texto modificado
           ),
           actions: [
             TextButton(
@@ -370,7 +433,7 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text(
-                'Sí, cancelar',
+                'Sí, salir', // Texto modificado
                 style: TextStyle(color: Colors.white),
               ),
             ),
@@ -539,25 +602,41 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
     }
   }
 
-  Future<void> _saveWorksheet() async {
+  // --- Función de guardado MODIFICADA ---
+  Future<void> _saveChanges() async {
     setState(() => _isSaving = true);
 
     try {
-      String? worksheetId = await _worksheetService.createWorksheet(
-        userEmail: widget.userEmail,
-        fieldWorkType: _selectedFieldWork!,
-        animalType: _selectedAnimalType,
-        selectedData: _selectedData.toList(),
-        selectedEcologyItems: _selectedEcologyItems.toList(),
-        customFields: _customFields,
-        objectCount: _objectCount,
-        objectsData: _objectsData,
-        location: _currentLocation,
+      // Preparar el mapa de datos para la actualización
+      Map<String, dynamic> updatedData = {
+        'userEmail': widget.userEmail,
+        'fieldWorkType': _selectedFieldWork,
+        'animalType': _selectedAnimalType,
+        'selectedData': _selectedData.toList(),
+        'selectedEcologyItems': _selectedEcologyItems
+            .toList(), // Aunque esté vacío, lo mantenemos por consistencia
+        'customFields': _customFields,
+        'objectCount': _objectCount,
+        'objectsData': _objectsData,
+      };
+
+      // Agregar datos de ubicación en el formato correcto (igual que en createWorksheet)
+      if (_currentLocation != null) {
+        updatedData['location'] =
+            _currentLocation!['locationName'] ?? 'Ubicación no disponible';
+        updatedData['latitude'] = _currentLocation!['latitude'];
+        updatedData['longitude'] = _currentLocation!['longitude'];
+      }
+
+      // Llamar a updateWorksheet en lugar de createWorksheet
+      bool success = await _worksheetService.updateWorksheet(
+        widget.worksheetId,
+        updatedData,
       );
 
       if (!mounted) return;
 
-      if (worksheetId != null) {
+      if (success) {
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -569,17 +648,19 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
               children: [
                 Icon(Icons.check_circle, color: Color(0xFF6F8B5E), size: 28),
                 SizedBox(width: 8),
-                Text('¡Planilla guardada!'),
+                Text('¡Planilla actualizada!'), // Título modificado
               ],
             ),
             content: const Text(
-              'Tu planilla ha sido guardada exitosamente y ya puedes verla en la sección correspondiente.',
+              'Tus cambios han sido guardados exitosamente.', // Texto modificado
             ),
             actions: [
               ElevatedButton(
                 onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(); // Cierra el diálogo
+                  Navigator.of(
+                    context,
+                  ).pop(true); // Cierra la página de edición
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6F8B5E),
@@ -601,7 +682,7 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Error al guardar la planilla. Intenta de nuevo.',
+                    'Error al actualizar la planilla. Intenta de nuevo.', // Texto modificado
                   ),
                 ),
               ],
@@ -634,6 +715,8 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
     }
   }
 
+  // --- Todo el ÁRBOL DE WIDGETS de new_worksheet_page se copia aquí ---
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -643,10 +726,10 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.black87),
-          onPressed: () => _showCancelDialog(),
+          onPressed: () => _showCancelDialog(), // Usa el mismo diálogo
         ),
         title: const Text(
-          'Nueva Planilla',
+          'Editar Planilla', // Título modificado
           style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
@@ -662,7 +745,7 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
           _buildProgressIndicator(),
           _buildLocationBanner(),
           Expanded(child: _buildCurrentStep()),
-          _buildBottomButtons(),
+          _buildBottomButtons(), // Este ya maneja el guardado
         ],
       ),
     );
@@ -1351,13 +1434,17 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
   }
 
   Widget _buildDataEntry() {
-    if (_objectsData.isEmpty) {
-      for (int i = 0; i < _objectCount; i++) {
-        _objectsData.add({});
-      }
-      // Auto-fill GPS, Fecha y Hora para todos los objetos
-      _autoFillDefaultValues();
+    // Asegurarse de que _objectsData tenga la longitud correcta si se cambió
+    while (_objectsData.length < _objectCount) {
+      _objectsData.add({});
     }
+    while (_objectsData.length > _objectCount) {
+      _objectsData.removeLast();
+    }
+
+    // Auto-rellenar campos vacíos de tiempo y localización
+    // Esto se ejecuta tanto para planillas nuevas como editadas
+    _autoFillDefaultValues();
 
     List<Map<String, String>> allSelectedFields = [];
 
@@ -1799,7 +1886,9 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
           const Spacer(),
           if (_currentStep == 4)
             ElevatedButton(
-              onPressed: _isSaving ? null : _saveWorksheet,
+              onPressed: _isSaving
+                  ? null
+                  : _saveChanges, // Llamar a la función de guardado modificada
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6F8B5E),
                 disabledBackgroundColor: Colors.grey[300],
@@ -1821,7 +1910,7 @@ class _NewWorksheetPageState extends State<NewWorksheetPage> {
                       ),
                     )
                   : const Text(
-                      'Guardar',
+                      'Guardar', // Texto modificado
                       style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
             )

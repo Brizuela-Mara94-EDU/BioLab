@@ -383,7 +383,8 @@ class _HomePageState extends State<HomePage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const CameraPage(),
+                        builder: (context) =>
+                            CameraPage(userEmail: widget.email),
                       ),
                     );
                   },

@@ -1,107 +1,50 @@
 // src/services/worksheet_service.dart
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart';
+import 'package:image/image.dart' as img;
+import 'location_service.dart';
 
 class WorksheetService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-
-  /// Obtener la ubicación actual del dispositivo
-  Future<Map<String, dynamic>> _getCurrentLocation() async {
-    try {
-      // Verificar permisos
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          return {
-            'location': 'Ubicación no disponible',
-            'latitude': null,
-            'longitude': null,
-          };
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        return {
-          'location': 'Ubicación no disponible',
-          'latitude': null,
-          'longitude': null,
-        };
-      }
-
-      // Obtener posición actual
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      // Convertir coordenadas a dirección legible
-      try {
-        List<Placemark> placemarks = await placemarkFromCoordinates(
-          position.latitude,
-          position.longitude,
-        );
-
-        if (placemarks.isNotEmpty) {
-          Placemark place = placemarks[0];
-          String location = '';
-
-          if (place.locality != null && place.locality!.isNotEmpty) {
-            location = place.locality!;
-          } else if (place.subAdministrativeArea != null &&
-              place.subAdministrativeArea!.isNotEmpty) {
-            location = place.subAdministrativeArea!;
-          } else if (place.administrativeArea != null &&
-              place.administrativeArea!.isNotEmpty) {
-            location = place.administrativeArea!;
-          } else {
-            location = 'Ubicación detectada';
-          }
-
-          return {
-            'location': location,
-            'latitude': position.latitude,
-            'longitude': position.longitude,
-          };
-        }
-      } catch (e) {
-        print('Error al convertir coordenadas: $e');
-      }
-
-      return {
-        'location':
-            'Lat: ${position.latitude.toStringAsFixed(4)}, Lng: ${position.longitude.toStringAsFixed(4)}',
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-      };
-    } catch (e) {
-      print('Error obteniendo ubicación: $e');
-      return {
-        'location': 'Ubicación no disponible',
-        'latitude': null,
-        'longitude': null,
-      };
-    }
-  }
+  final LocationService _locationService = LocationService();
 
   /// Crear un nuevo trabajo de campo (worksheet)
   Future<String?> createWorksheet({
     required String userEmail,
     required String fieldWorkType, // 'Animal', 'Botánica', 'Hongos'
-    String?
-    animalType, // 'Vertebrados', 'Invertebrados', 'Ambos' (solo si es Animal)
+    String? animalType, // 'Vertebrados', 'Invertebrados', 'Ambos'
     required List<String> selectedData,
     required List<String> selectedEcologyItems,
     required List<Map<String, String>> customFields,
     required int objectCount,
     required List<Map<String, dynamic>> objectsData,
+    Map<String, dynamic>? location, // Ubicación ya obtenida (opcional)
   }) async {
     try {
       print('📝 Creando nuevo worksheet para: $userEmail');
 
-      // Obtener ubicación actual
-      Map<String, dynamic> locationData = await _getCurrentLocation();
+      // Usar ubicación proporcionada o obtener una nueva
+      Map<String, dynamic>? locationData = location;
+
+      if (locationData == null) {
+        print('📍 Ubicación no proporcionada, obteniendo nueva...');
+        locationData = await _locationService.getCurrentLocation();
+      }
+
+      // Valores por defecto si no hay ubicación
+      String locationName = 'Ubicación no disponible';
+      double? latitude;
+      double? longitude;
+
+      if (locationData != null) {
+        locationName = locationData['locationName'] ?? 'Ubicación desconocida';
+        latitude = locationData['latitude'];
+        longitude = locationData['longitude'];
+        print('✅ Ubicación a guardar: $locationName');
+      } else {
+        print('⚠️ No se pudo obtener ubicación');
+      }
 
       // Obtener fecha actual en formato legible
       final now = DateTime.now();
@@ -129,9 +72,10 @@ class WorksheetService {
         'objectsData': objectsData,
         'date': formattedDate,
         'fullDate': Timestamp.fromDate(now),
-        'location': locationData['location'],
-        'latitude': locationData['latitude'],
-        'longitude': locationData['longitude'],
+        'location': locationName,
+        'latitude': latitude,
+        'longitude': longitude,
+        'deleted': false, // Campo para eliminación lógica
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -144,7 +88,7 @@ class WorksheetService {
     }
   }
 
-  /// Obtener todos los worksheets de un usuario
+  /// Obtener todos los worksheets de un usuario (solo no eliminados)
   Future<List<Map<String, dynamic>>> getUserWorksheets(String userEmail) async {
     try {
       print('🔍 Buscando worksheets para: $userEmail');
@@ -155,13 +99,31 @@ class WorksheetService {
           .orderBy('createdAt', descending: true)
           .get();
 
-      List<Map<String, dynamic>> worksheets = querySnapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return data;
-      }).toList();
+      print('📦 Total documentos encontrados: ${querySnapshot.docs.length}');
 
-      print('📊 Worksheets encontrados: ${worksheets.length}');
+      // Filtrar en memoria los que NO están eliminados
+      List<Map<String, dynamic>> worksheets = [];
+
+      for (var doc in querySnapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+        // Verificar el campo deleted
+        bool isDeleted = data.containsKey('deleted')
+            ? (data['deleted'] == true)
+            : false;
+
+        print(
+          '📄 Doc ${doc.id}: deleted field exists: ${data.containsKey('deleted')}, isDeleted: $isDeleted',
+        );
+
+        // Solo agregar si NO está eliminado
+        if (!isDeleted) {
+          data['id'] = doc.id;
+          worksheets.add(data);
+        }
+      }
+
+      print('📊 Worksheets activos encontrados: ${worksheets.length}');
       return worksheets;
     } catch (e) {
       print('💥 Error obteniendo worksheets: $e');
@@ -169,7 +131,7 @@ class WorksheetService {
     }
   }
 
-  /// Obtener worksheets por categoría
+  /// Obtener worksheets por categoría (solo no eliminados)
   Future<List<Map<String, dynamic>>> getWorksheetsByCategory(
     String userEmail,
     String category,
@@ -184,13 +146,35 @@ class WorksheetService {
           .orderBy('createdAt', descending: true)
           .get();
 
-      List<Map<String, dynamic>> worksheets = querySnapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return data;
-      }).toList();
+      print(
+        '📦 Total documentos encontrados en $category: ${querySnapshot.docs.length}',
+      );
 
-      print('📊 Worksheets encontrados en $category: ${worksheets.length}');
+      // Filtrar en memoria los que NO están eliminados
+      List<Map<String, dynamic>> worksheets = [];
+
+      for (var doc in querySnapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+        // Verificar el campo deleted
+        bool isDeleted = data.containsKey('deleted')
+            ? (data['deleted'] == true)
+            : false;
+
+        print(
+          '📄 Doc ${doc.id}: deleted field exists: ${data.containsKey('deleted')}, isDeleted: $isDeleted',
+        );
+
+        // Solo agregar si NO está eliminado
+        if (!isDeleted) {
+          data['id'] = doc.id;
+          worksheets.add(data);
+        }
+      }
+
+      print(
+        '📊 Worksheets activos encontrados en $category: ${worksheets.length}',
+      );
       return worksheets;
     } catch (e) {
       print('💥 Error obteniendo worksheets por categoría: $e');
@@ -219,18 +203,90 @@ class WorksheetService {
     }
   }
 
-  /// Eliminar un worksheet
+  /// Eliminación lógica (soft delete)
+  Future<bool> softDeleteWorksheet(String worksheetId) async {
+    try {
+      print('🗑️ Eliminando lógicamente worksheet: $worksheetId');
+
+      // Usar set con merge para que funcione incluso si el campo no existe
+      await _db.collection('Worksheets').doc(worksheetId).set({
+        'deleted': true,
+        'deletedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      print('✅ Worksheet marcado como eliminado');
+      return true;
+    } catch (e) {
+      print('💥 Error en eliminación lógica: $e');
+      return false;
+    }
+  }
+
+  /// Restaurar worksheet eliminado
+  Future<bool> restoreWorksheet(String worksheetId) async {
+    try {
+      print('♻️ Restaurando worksheet: $worksheetId');
+
+      // Usar set con merge para mayor compatibilidad
+      await _db.collection('Worksheets').doc(worksheetId).set({
+        'deleted': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Eliminar el campo deletedAt si existe
+      await _db.collection('Worksheets').doc(worksheetId).update({
+        'deletedAt': FieldValue.delete(),
+      });
+
+      print('✅ Worksheet restaurado');
+      return true;
+    } catch (e) {
+      print('💥 Error restaurando worksheet: $e');
+      return false;
+    }
+  }
+
+  /// Eliminar un worksheet permanentemente
   Future<bool> deleteWorksheet(String worksheetId) async {
     try {
-      print('🗑️ Eliminando worksheet: $worksheetId');
+      print('🗑️ Eliminando worksheet permanentemente: $worksheetId');
 
       await _db.collection('Worksheets').doc(worksheetId).delete();
 
-      print('✅ Worksheet eliminado exitosamente');
+      print('✅ Worksheet eliminado permanentemente');
       return true;
     } catch (e) {
       print('💥 Error eliminando worksheet: $e');
       return false;
+    }
+  }
+
+  /// Obtener worksheets eliminados (papelera)
+  Future<List<Map<String, dynamic>>> getDeletedWorksheets(
+    String userEmail,
+  ) async {
+    try {
+      print('🗑️ Buscando worksheets eliminados para: $userEmail');
+
+      QuerySnapshot querySnapshot = await _db
+          .collection('Worksheets')
+          .where('userEmail', isEqualTo: userEmail.trim().toLowerCase())
+          .where('deleted', isEqualTo: true)
+          .orderBy('deletedAt', descending: true)
+          .get();
+
+      List<Map<String, dynamic>> worksheets = querySnapshot.docs.map((doc) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+
+      print('📊 Worksheets eliminados encontrados: ${worksheets.length}');
+      return worksheets;
+    } catch (e) {
+      print('💥 Error obteniendo worksheets eliminados: $e');
+      return [];
     }
   }
 
@@ -255,5 +311,65 @@ class WorksheetService {
       print('💥 Error obteniendo worksheet: $e');
       return null;
     }
+  }
+
+  /// Crear thumbnail de la imagen
+  Future<Uint8List> _createThumbnail(Uint8List imageBytes) async {
+    try {
+      img.Image? image = img.decodeImage(imageBytes);
+      if (image == null) throw Exception('No se pudo decodificar la imagen');
+
+      img.Image thumbnail = img.copyResize(image, width: 400);
+
+      return Uint8List.fromList(img.encodeJpg(thumbnail, quality: 70));
+    } catch (e) {
+      print('Error creando thumbnail: $e');
+      rethrow;
+    }
+  }
+
+  /// Actualizar imagen de fondo del worksheet
+  Future<bool> updateWorksheetBackgroundImage({
+    required String workId,
+    required Uint8List imageBytes,
+  }) async {
+    try {
+      Uint8List thumbnailBytes = await _createThumbnail(imageBytes);
+      List<int> thumbnailList = thumbnailBytes.toList();
+
+      await _db.collection('Worksheets').doc(workId).update({
+        'imagenFondo': thumbnailList,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      return true;
+    } catch (e) {
+      print('Error actualizando imagen de fondo: $e');
+      return false;
+    }
+  }
+
+  /// Eliminar imagen de fondo
+  Future<bool> removeWorksheetBackgroundImage(String workId) async {
+    try {
+      await _db.collection('Worksheets').doc(workId).update({
+        'imagenFondo': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      print('Error eliminando imagen de fondo: $e');
+      return false;
+    }
+  }
+
+  /// Obtener ubicación actual (método de utilidad)
+  Future<Map<String, dynamic>?> getCurrentLocation() async {
+    return await _locationService.getCurrentLocation();
+  }
+
+  /// Verificar si hay permisos de ubicación
+  Future<bool> hasLocationPermission() async {
+    return await _locationService.requestLocationPermission();
   }
 }
