@@ -324,8 +324,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) =>
-                            CameraPage(userEmail: widget.userEmail),
+                        builder: (context) => const CameraPage(),
                       ),
                     );
                   },

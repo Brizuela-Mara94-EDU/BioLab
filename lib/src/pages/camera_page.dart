@@ -5,15 +5,12 @@ import 'package:camera/camera.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:gal/gal.dart';
-import 'login_page.dart';
 
 // Importación condicional para la descarga en web
 import 'package:universal_html/html.dart' as html;
 
 class CameraPage extends StatefulWidget {
-  final String userEmail;
-
-  const CameraPage({super.key, required this.userEmail});
+  const CameraPage({super.key});
 
   @override
   State<CameraPage> createState() => _CameraPageState();
@@ -468,121 +465,6 @@ class _CameraPageState extends State<CameraPage> {
     }
   }
 
-  String get userName {
-    final emailName = widget.userEmail.split('@')[0];
-    return emailName.isNotEmpty
-        ? emailName[0].toUpperCase() + emailName.substring(1).toLowerCase()
-        : 'Usuario';
-  }
-
-  void _showUserMenu() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              backgroundColor: const Color(0xFF6F8B5E),
-              radius: 30,
-              child: Text(
-                widget.userEmail.isNotEmpty
-                    ? widget.userEmail[0].toUpperCase()
-                    : 'U',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              userName,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            Text(
-              widget.userEmail,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: const Icon(Icons.person, color: Color(0xFF6F8B5E)),
-              title: const Text('Perfil'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings, color: Color(0xFF6F8B5E)),
-              title: const Text('Configuración'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text(
-                'Cerrar sesión',
-                style: TextStyle(color: Colors.red),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _showLogoutDialog();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text(
-            'Cerrar sesión',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Cancelar',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                  (route) => false,
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text(
-                'Cerrar sesión',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   void dispose() {
     _controller?.dispose();
@@ -602,18 +484,31 @@ class _CameraPageState extends State<CameraPage> {
       );
     }
 
+    // Detectar si es pantalla grande (computadora) o pequeña (celular)
+    final size = MediaQuery.of(context).size;
+    final isLargeScreen = size.width > 600;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Vista previa de la cámara sin zoom ni deformación
-          Positioned.fill(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: _controller!.value.aspectRatio,
-                child: CameraPreview(_controller!),
-              ),
-            ),
+          // Vista previa de la cámara
+          Center(
+            child: isLargeScreen
+                ? // Computadora: usar AspectRatio directo sin zoom
+                  AspectRatio(
+                    aspectRatio: _controller!.value.aspectRatio,
+                    child: CameraPreview(_controller!),
+                  )
+                : // Celular: vertical ocupando altura
+                  FittedBox(
+                    fit: BoxFit.fitHeight,
+                    child: SizedBox(
+                      width: _controller!.value.previewSize!.height,
+                      height: _controller!.value.previewSize!.width,
+                      child: CameraPreview(_controller!),
+                    ),
+                  ),
           ),
 
           // Cuadrícula superpuesta
@@ -646,49 +541,24 @@ class _CameraPageState extends State<CameraPage> {
                     ),
                   ),
 
-                  Row(
-                    children: [
-                      // Botón de flash
-                      IconButton(
-                        onPressed: _toggleFlash,
-                        icon: Icon(
-                          _getFlashIconData(),
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
+                  // Botón de flash
+                  IconButton(
+                    onPressed: _toggleFlash,
+                    icon: Icon(
+                      _getFlashIconData(),
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
 
-                      // Botón de configuración
-                      IconButton(
-                        onPressed: _showOptionsMenu,
-                        icon: const Icon(
-                          Icons.settings,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
-
-                      // Avatar de usuario
-                      GestureDetector(
-                        onTap: _showUserMenu,
-                        child: Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          child: CircleAvatar(
-                            backgroundColor: const Color(0xFF6F8B5E),
-                            radius: 18,
-                            child: Text(
-                              widget.userEmail.isNotEmpty
-                                  ? widget.userEmail[0].toUpperCase()
-                                  : 'U',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                  // Botón de configuración
+                  IconButton(
+                    onPressed: _showOptionsMenu,
+                    icon: const Icon(
+                      Icons.settings,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
                 ],
               ),
@@ -794,36 +664,6 @@ class _CameraPageState extends State<CameraPage> {
             ),
           ),
         ],
-      ),
-      bottomNavigationBar: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.home, color: Colors.white, size: 28),
-            ),
-            IconButton(
-              onPressed: () {},
-              icon: const Icon(
-                Icons.photo_camera,
-                color: Color(0xFF6F8B5E),
-                size: 28,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

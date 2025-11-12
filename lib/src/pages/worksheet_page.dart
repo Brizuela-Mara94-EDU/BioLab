@@ -372,10 +372,7 @@ class _WorksheetPageState extends State<WorksheetPage> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        CameraPage(userEmail: widget.userEmail),
-                  ),
+                  MaterialPageRoute(builder: (context) => const CameraPage()),
                 );
               },
               icon: Icon(Icons.camera_alt, color: Colors.grey[600], size: 28),
